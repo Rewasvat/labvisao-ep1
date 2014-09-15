@@ -94,7 +94,7 @@ def enhanceImage(img):
         for j in xrange(width):
             wW, wH = 48, 36
             x, y = i-(wW/2), j-(wH/2)
-            
+            # corrigindo valores da janela pra não sair da imagem
             if x < 0:
                 wW += x   
                 x = 0
@@ -106,12 +106,9 @@ def enhanceImage(img):
             if y + wH >= width:
                 wH -= y + wH - width
             mean = II.media(x, y, wW, wH)
-            stdDev = II.desvioPadrao(x, y, wW, wH)
-            
+            stdDev = II.desvioPadrao(x, y, wW, wH)            
             #print "i,j=(%s,%s) :: x,y=(%s,%s) :: mean=%s :: stdDev=%s :: enhanceCoef=%s" % (i,j,x,y,mean,stdDev,enhancementCoefficient(stdDev))
-            #raw_input()
             enhanced[i,j] = enhancementCoefficient(stdDev)*(img[i,j] - mean) + mean
-            #enhanced[i,j] = enhancementCoefficient(astd)*(img[i,j] - mean) + mean
     return enhanced
     
 ###################################################
@@ -129,10 +126,19 @@ def extractVerticalEdge(img):
     direção horizontal na imagem gradiente e temos 
     o resultado desse passo
     """
-    pass
+    sobel = np.asarray( [ [-1,0,1], [-2,0,2], [-1,0,1] ] )
+    gradiente = cv2.filter2D(img,-1,sobel)
+    #gradiente = cv2.Sobel(img,-1,1,0,ksize=3)
+    
+    height, width = img.shape[:2]
+    for i in xrange(height):
+        for j in xrange(width):
+            gradiente[i,j] = 255 * (gradiente[i,j] < 191)
+    
+    return gradiente
     
 ###################################################
-def removeNoise(img):
+def removeNoise(imgo):
     """
     3) Background Curve and Noise Removing 
     E = resultado do passo anterior (edge image)
@@ -165,8 +171,41 @@ def removeNoise(img):
                 if (Mi,j + Ni,j > Tl || Mi,j + Ni,j < Ts)
                     Ei,j = 0;
     """
-    pass
+    img = imgo.copy()
+    height, width = img.shape[:2]
+    def edge(i, j):
+        if i < 0 or j < 0 or i >= height or j >= width:
+            return 0
+        return int( img[i,j] == 0 )
+        
+    M = np.zeros( (height+2, width+2) )
+    N = np.zeros( (height+2, width+2) )
+    Tl, Ts = 28, 5
+    for i in xrange(height):
+        for j in xrange(width):
+            if edge(i,j):
+                if edge(i-1,j-1) + edge(i-1,j) + edge(i-1,j+1) + edge(i,j-1) > 0:
+                    M[i,j] = max(M[i-1,j-1], M[i-1,j], M[i-1,j+1], M[i,j-1]) + 1
+                else:
+                    M[i,j] = max(M[i-2,j-1], M[i-2,j], M[i-2,j+1], M[i-1,j-2], M[i-1,j+2], M[i,j-2]) + 1
 
+    for i in xrange(height-1,-1,-1):
+        for j in xrange(width-1,-1,-1):
+            if edge(i,j):
+                if edge(i+1,j-1) + edge(i+1,j) + edge(i+1,j+1) + edge(i,j+1) > 0:
+                    N[i,j] = max(N[i+1,j-1], N[i+1,j], N[i+1,j+1], N[i,j+1]) + 1;
+                else:
+                    N[i,j] = max(N[i+2,j-1], N[i+2,j], N[i+2,j+1], N[i+1,j-2], N[i+1,j+2], N[i,j+2]) + 1;
+
+    for i in xrange(height):
+        for j in xrange(width):
+            if edge(i,j):
+                if M[i,j] + N[i,j] > Tl or M[i,j] + N[i,j] < Ts:
+                    #Ei,j = 0;
+                    img[i,j] = 255
+
+    return img
+                    
 ###################################################
 def findPlate(img):
     """
@@ -182,6 +221,8 @@ if __name__ == '__main__':
     import sys
     original = cv2.imread(sys.argv[1], cv2.IMREAD_GRAYSCALE)
     enhanced = enhanceImage(original)
+    edges = extractVerticalEdge(enhanced)
+    elimpa = removeNoise(edges)
     #cv2.imshow('Original', original)
     #cv2.imshow('Melhorada', enhanced)
     #cv2.waitKey(0)
@@ -191,8 +232,12 @@ if __name__ == '__main__':
     def PlotImage(image, title):
         pylab.imshow(image, cmap=pylab.cm.gray)
         pylab.title(title)
-    pylab.subplot(121)
+    pylab.subplot(221)
     PlotImage(original, "Original Image")
-    pylab.subplot(122)
+    pylab.subplot(222)
     PlotImage(enhanced, "Enhanced Image")
+    pylab.subplot(223)
+    PlotImage(edges, "Edges (Gradient Image)")
+    pylab.subplot(224)
+    PlotImage(edges, "Edges (Limpa, sem ruidos)")
     pylab.show()
