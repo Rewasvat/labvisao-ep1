@@ -3,6 +3,7 @@
 
 import cv2
 import numpy as np
+from time import time
 
 #imagens tem 384x288 pixels, 256 grayscale
 
@@ -92,7 +93,7 @@ def enhanceImage(img):
     
     for i in xrange(height):
         for j in xrange(width):
-            wW, wH = 48, 36
+            wW, wH = 36, 48
             x, y = i-(wW/2), j-(wH/2)
             # corrigindo valores da janela pra não sair da imagem
             if x < 0:
@@ -127,14 +128,18 @@ def extractVerticalEdge(img):
     o resultado desse passo
     """
     sobel = np.asarray( [ [-1,0,1], [-2,0,2], [-1,0,1] ] )
-    gradiente = cv2.filter2D(img,-1,sobel)
-    #gradiente = cv2.Sobel(img,-1,1,0,ksize=3)
+    #gradiente = cv2.filter2D(img,-1,sobel)
+    gradiente = cv2.Sobel(img,-1,1,0,ksize=3)
     
     height, width = img.shape[:2]
     for i in xrange(height):
         for j in xrange(width):
             gradiente[i,j] = 255 * (gradiente[i,j] < 191)
     
+    #for i in xrange(height):
+    #    for j in xrange(width):
+            
+            
     return gradiente
     
 ###################################################
@@ -177,10 +182,11 @@ def removeNoise(imgo):
         if i < 0 or j < 0 or i >= height or j >= width:
             return 0
         return int( img[i,j] == 0 )
-        
+
     M = np.zeros( (height+2, width+2) )
     N = np.zeros( (height+2, width+2) )
     Tl, Ts = 28, 5
+
     for i in xrange(height):
         for j in xrange(width):
             if edge(i,j):
@@ -211,33 +217,64 @@ def findPlate(img):
     """
     4) License Plate Search and Segmentation
     """
-    pass
+    II = ImagemIntegral(img)
+    
+    wW, wH = 72, 192
+    height, width = img.shape[:2]
+    
+    edgeTotal = -1
+    wX, wY = -1,-1
+    
+    for i in xrange( (wW/2), height-(wW/2)):
+        for j in xrange( (wH/2), width-(wH/2)):
+            x, y = i-(wW/2), j-(wH/2)
+            etot = II.area(x, y, wW, wH)
+            if edgeTotal == -1 or etot < edgeTotal:
+                edgeTotal, wX, wY = etot, x, y
+          
+    #print "total da placa=", II.area(96, 372, wW, wH)
+    #print "total da area retornada=", edgeTotal
+    return (wX, wY, wW, wH)
     
 ######################################################################################################
 # Main
 ######################################################################################################
-
 if __name__ == '__main__':
     import sys
-    original = cv2.imread(sys.argv[1], cv2.IMREAD_GRAYSCALE)
+    mark = time()
+    original = cv2.imread(sys.argv[1], 0)
+    print "Imagem %s %s lida em %s secs." % (sys.argv[1], original.shape, time()-mark)
+    
+    mark = time()
     enhanced = enhanceImage(original)
+    print "Imagem melhorada em %s secs." % (time()-mark)
+    
+    mark = time()
     edges = extractVerticalEdge(enhanced)
+    print "Linhas verticais extraidas em %s secs." % (time()-mark)
+    
+    mark = time()
     elimpa = removeNoise(edges)
+    print "Imagem limpa e ruidos removidos em %s secs." % (time()-mark)
+    
+    mark = time()
+    pX, pY, pW, pH = findPlate(elimpa)
+    print "Subimagem da placa (%s, %s, %s, %s) localizada em %s secs." % (pX, pY, pW, pH, time()-mark)
+    placa = original[pX:pX+pW, pY:pY+pH]
+    
     #cv2.imshow('Original', original)
-    #cv2.imshow('Melhorada', enhanced)
+    #cv2.imshow('Melhorada', edges)
     #cv2.waitKey(0)
     #cv2.destroyAllWindows()
     
     import pylab
-    def PlotImage(image, title):
+    def PlotImage(image, title, npos):
+        pylab.subplot(npos)
         pylab.imshow(image, cmap=pylab.cm.gray)
         pylab.title(title)
-    pylab.subplot(221)
-    PlotImage(original, "Original Image")
-    pylab.subplot(222)
-    PlotImage(enhanced, "Enhanced Image")
-    pylab.subplot(223)
-    PlotImage(edges, "Edges (Gradient Image)")
-    pylab.subplot(224)
-    PlotImage(edges, "Edges (Limpa, sem ruidos)")
+    PlotImage(original, "Original Image",               231)
+    PlotImage(enhanced, "Enhanced Image",               232)
+    PlotImage(edges,    "Edges (Gradient Image)",       233)
+    PlotImage(elimpa,   "Edges (Limpa, sem ruidos)",    234)
+    PlotImage(placa,    "Subimagem da Placa",           235)
     pylab.show()
