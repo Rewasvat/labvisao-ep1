@@ -134,11 +134,16 @@ def extractVerticalEdge(img):
     height, width = img.shape[:2]
     for i in xrange(height):
         for j in xrange(width):
-            gradiente[i,j] = 255 * (gradiente[i,j] < 191)
-    
-    #for i in xrange(height):
-    #    for j in xrange(width):
+            gradiente[i,j] = 255 * (abs(gradiente[i,j]) < 191)
             
+            ###
+            ### USAR THRESHOLDING - otsu
+            ###
+            
+    ###
+    ### NONMAXIMUM SUPPRESSION - percorrer elementos de uma linha, achar 
+    ###                         sequencias de pixels de edge, remover todos menos o máximo
+                
             
     return gradiente
     
