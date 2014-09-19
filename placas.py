@@ -129,17 +129,27 @@ def extractVerticalEdge(img):
     """
     sobel = np.asarray( [ [-1,0,1], [-2,0,2], [-1,0,1] ] )
     #gradiente = cv2.filter2D(img,-1,sobel)
-    gradiente = cv2.Sobel(img,-1,1,0,ksize=3)
+    gradiente = np.abs( cv2.Sobel(img,-1,1,0,ksize=3) )
+    
+    thresh, gradiente = cv2.threshold(np.abs(gradiente), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    print "thresh =", thresh
     
     height, width = img.shape[:2]
     for i in xrange(height):
+        seqStart, seqEnd = -1, -1
         for j in xrange(width):
-            gradiente[i,j] = 255 * (abs(gradiente[i,j]) < 191)
-            
-            ###
-            ### USAR THRESHOLDING - otsu
-            ###
-            
+            if gradiente[i,j] == 0 and seqStart == -1:
+                seqStart = j
+            elif gradiente[i,j] != 0 and seqEnd == -1 and seqStart != -1:
+                seqEnd = j
+                
+                seq = img[i,seqStart:seqEnd]
+                maxindex = seqStart + np.argmax(seq)
+                gradiente[i, seqStart:seqEnd] = 255
+                gradiente[i, maxindex] = 0
+                
+                seqStart, seqEnd = -1, -1
+
     ###
     ### NONMAXIMUM SUPPRESSION - percorrer elementos de uma linha, achar 
     ###                         sequencias de pixels de edge, remover todos menos o máximo
@@ -248,23 +258,23 @@ if __name__ == '__main__':
     import sys
     mark = time()
     original = cv2.imread(sys.argv[1], 0)
-    print "Imagem %s %s lida em %s secs." % (sys.argv[1], original.shape, time()-mark)
+    print "Imagem %s %s lida em %.2f secs." % (sys.argv[1], original.shape, time()-mark)
     
     mark = time()
-    enhanced = enhanceImage(original)
-    print "Imagem melhorada em %s secs." % (time()-mark)
+    enhanced = cv2.imread(sys.argv[1], 0)#enhanceImage(original)
+    print "Imagem melhorada em %.2f secs." % (time()-mark)
     
     mark = time()
     edges = extractVerticalEdge(enhanced)
-    print "Linhas verticais extraidas em %s secs." % (time()-mark)
+    print "Linhas verticais extraidas em %.2f secs." % (time()-mark)
     
     mark = time()
     elimpa = removeNoise(edges)
-    print "Imagem limpa e ruidos removidos em %s secs." % (time()-mark)
+    print "Imagem limpa e ruidos removidos em %.2f secs." % (time()-mark)
     
     mark = time()
     pX, pY, pW, pH = findPlate(elimpa)
-    print "Subimagem da placa (%s, %s, %s, %s) localizada em %s secs." % (pX, pY, pW, pH, time()-mark)
+    print "Subimagem da placa (%s, %s, %s, %s) localizada em %.2f secs." % (pX, pY, pW, pH, time()-mark)
     placa = original[pX:pX+pW, pY:pY+pH]
     
     #cv2.imshow('Original', original)
@@ -282,4 +292,9 @@ if __name__ == '__main__':
     PlotImage(edges,    "Edges (Gradient Image)",       233)
     PlotImage(elimpa,   "Edges (Limpa, sem ruidos)",    234)
     PlotImage(placa,    "Subimagem da Placa",           235)
+    
+    def onPress(event):
+        if event.key == 'q':
+            pylab.close()
+    pylab.connect('key_press_event', onPress)
     pylab.show()
