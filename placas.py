@@ -127,13 +127,14 @@ def extractVerticalEdge(img):
     direção horizontal na imagem gradiente e temos 
     o resultado desse passo
     """
-    sobel = np.asarray( [ [-1,0,1], [-2,0,2], [-1,0,1] ] )
+    #sobel = np.asarray( [ [-1,0,1], [-2,0,2], [-1,0,1] ] )
     #gradiente = cv2.filter2D(img,-1,sobel)
-    gradiente = np.abs( cv2.Sobel(img,-1,1,0,ksize=3) )
+    gradiente = np.abs( cv2.Sobel(img,-1,1,0,ksize=3) )  #sobel pode retornar pixels negativos, só magnitude interessa aqui
     
     thresh, gradiente = cv2.threshold(np.abs(gradiente), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     print "thresh =", thresh
     
+    # non-maximum suppression (horizontal direction)
     height, width = img.shape[:2]
     for i in xrange(height):
         seqStart, seqEnd = -1, -1
@@ -149,11 +150,7 @@ def extractVerticalEdge(img):
                 gradiente[i, maxindex] = 0
                 
                 seqStart, seqEnd = -1, -1
-
-    ###
-    ### NONMAXIMUM SUPPRESSION - percorrer elementos de uma linha, achar 
-    ###                         sequencias de pixels de edge, remover todos menos o máximo
-                
+       
             
     return gradiente
     
