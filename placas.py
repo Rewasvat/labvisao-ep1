@@ -197,7 +197,7 @@ def removeNoise(imgo):
 
     M = np.zeros( (height+2, width+2) )
     N = np.zeros( (height+2, width+2) )
-    Tl, Ts = 28, 5
+    Tl, Ts = 28, 5  ##>> limites de tamanho pra limpar arestas
 
     for i in xrange(height):
         for j in xrange(width):
@@ -231,7 +231,7 @@ def findPlate(img):
     """
     II = ImagemIntegral(img)
     
-    wW, wH = 72, 192
+    wW, wH = 60, 150            ##>> tamanho da area pra procurar placa
     height, width = img.shape[:2]
     
     edgeTotal = -1
