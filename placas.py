@@ -89,7 +89,7 @@ def enhanceImage(img):
     """
     II = ImagemIntegral(img)
     height, width = img.shape[:2]
-    enhanced = np.zeros( (height, width) )
+    enhanced = np.zeros( (height, width), dtype=img.dtype )
     
     for i in xrange(height):
         for j in xrange(width):
@@ -109,7 +109,7 @@ def enhanceImage(img):
             mean = II.media(x, y, wW, wH)
             stdDev = II.desvioPadrao(x, y, wW, wH)            
             #print "i,j=(%s,%s) :: x,y=(%s,%s) :: mean=%s :: stdDev=%s :: enhanceCoef=%s" % (i,j,x,y,mean,stdDev,enhancementCoefficient(stdDev))
-            enhanced[i,j] = enhancementCoefficient(stdDev)*(img[i,j] - mean) + mean
+            enhanced[i,j] = np.around( enhancementCoefficient(stdDev)*(img[i,j] - mean) + mean )
     return enhanced
     
 ###################################################
@@ -132,7 +132,7 @@ def extractVerticalEdge(img):
     gradiente = np.abs( cv2.Sobel(img,-1,1,0,ksize=3) )  #sobel pode retornar pixels negativos, só magnitude interessa aqui
     
     thresh, gradiente = cv2.threshold(np.abs(gradiente), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    print "thresh =", thresh
+    #print "thresh =", thresh
     
     # non-maximum suppression (horizontal direction)
     height, width = img.shape[:2]
@@ -155,7 +155,7 @@ def extractVerticalEdge(img):
     return gradiente
     
 ###################################################
-def removeNoise(imgo):
+def removeNoise(imgo, longT, shortT):
     """
     3) Background Curve and Noise Removing 
     E = resultado do passo anterior (edge image)
@@ -197,7 +197,7 @@ def removeNoise(imgo):
 
     M = np.zeros( (height+2, width+2) )
     N = np.zeros( (height+2, width+2) )
-    Tl, Ts = 28, 5  ##>> limites de tamanho pra limpar arestas
+    Tl, Ts = longT, shortT  ##>> limites de tamanho pra limpar arestas
 
     for i in xrange(height):
         for j in xrange(width):
@@ -225,13 +225,13 @@ def removeNoise(imgo):
     return img
                     
 ###################################################
-def findPlate(img):
+def findPlate(img, width, height):
     """
     4) License Plate Search and Segmentation
     """
     II = ImagemIntegral(img)
     
-    wW, wH = 60, 150            ##>> tamanho da area pra procurar placa
+    wW, wH = height, width            ##>> tamanho da area pra procurar placa
     height, width = img.shape[:2]
     
     edgeTotal = -1
@@ -252,46 +252,81 @@ def findPlate(img):
 # Main
 ######################################################################################################
 if __name__ == '__main__':
-    import sys
-    mark = time()
-    original = cv2.imread(sys.argv[1], 0)
-    print "Imagem %s %s lida em %.2f secs." % (sys.argv[1], original.shape, time()-mark)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Analyze given image to find license plate location. The located sub-image of the plate will be saved as the same extension" +
+        " of the original file, and the same name with a '_plate' suffix.\nExample:\n\tinput filename: someImage.png\n\toutput: someImage_plate.png")
+    parser.add_argument("filename", help="Filename of the image to find a license plate in.")
+    parser.add_argument("--enhance", "-e", action="store_true", default=False, help="Enhance the image before analizing it (default is False)")
+    parser.add_argument("--display", "-d", action="store_true", default=False, help="Opens a pylab window to show the resulting image of each step. Pressing 'q' closes it" +
+        " (default is False)")
+    parser.add_argument("--longEdge", "-le", type=int, default=28, help="Threshold for long edges to be filtered from image. (default is 28)")
+    parser.add_argument("--shortEdge", "-se", type=int, default=5, help="Threshold for short edges to be filtered from image. (default is 5)")
+    parser.add_argument("--plateWidth", "-pw", type=int, default=150, help="Width of the window used to search for a plate. Should be a little bigger than the actual plate width" +
+        " (default is 150)")
+    parser.add_argument("--plateHeight", "-ph", type=int, default=60, help="Height of the window used to search for a plate. Should be a little bigger than the actual plate " + 
+        "height (default is 60)")
+
+    args = parser.parse_args()
     
     mark = time()
-    enhanced = cv2.imread(sys.argv[1], 0)#enhanceImage(original)
-    print "Imagem melhorada em %.2f secs." % (time()-mark)
+    total = 0.0
+    original = cv2.imread(args.filename, 0)
+    stepTime = time()-mark
+    total += stepTime
+    print "Imagem %s %s lida em %.2f secs." % (args.filename, original.shape, stepTime)
+    
+    if args.enhance:
+        mark = time()
+        enhanced = enhanceImage(original)
+        stepTime = time()-mark
+        total += stepTime
+        print "Imagem melhorada em %.2f secs." % (stepTime)
+    else:
+        enhanced = original
     
     mark = time()
     edges = extractVerticalEdge(enhanced)
-    print "Linhas verticais extraidas em %.2f secs." % (time()-mark)
+    stepTime = time()-mark
+    total += stepTime
+    print "Linhas verticais extraidas em %.2f secs." % (stepTime)
     
     mark = time()
-    elimpa = removeNoise(edges)
-    print "Imagem limpa e ruidos removidos em %.2f secs." % (time()-mark)
+    elimpa = removeNoise(edges, args.longEdge, args.shortEdge)
+    stepTime = time()-mark
+    total += stepTime
+    print "Imagem limpa e ruidos removidos em %.2f secs." % (stepTime)
     
     mark = time()
-    pX, pY, pW, pH = findPlate(elimpa)
-    print "Subimagem da placa (%s, %s, %s, %s) localizada em %.2f secs." % (pX, pY, pW, pH, time()-mark)
+    pX, pY, pW, pH = findPlate(elimpa, args.plateWidth, args.plateHeight)
+    stepTime = time()-mark
+    total += stepTime
+    print "Subimagem da placa (%s, %s, %s, %s) localizada em %.2f secs." % (pX, pY, pW, pH, stepTime)
     placa = original[pX:pX+pW, pY:pY+pH]
     
-    #cv2.imshow('Original', original)
-    #cv2.imshow('Melhorada', edges)
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
+    print "Full execution took %.2f secs" % (total) 
     
-    import pylab
-    def PlotImage(image, title, npos):
-        pylab.subplot(npos)
-        pylab.imshow(image, cmap=pylab.cm.gray)
-        pylab.title(title)
-    PlotImage(original, "Original Image",               231)
-    PlotImage(enhanced, "Enhanced Image",               232)
-    PlotImage(edges,    "Edges (Gradient Image)",       233)
-    PlotImage(elimpa,   "Edges (Limpa, sem ruidos)",    234)
-    PlotImage(placa,    "Subimagem da Placa",           235)
+    outName = args.filename.split(".")
+    outName = ".".join(outName[:-1]) + "_plate." + outName[-1]
+    cv2.imwrite(outName, placa)
+    print "Saved plate image to:", outName
     
-    def onPress(event):
-        if event.key == 'q':
-            pylab.close()
-    pylab.connect('key_press_event', onPress)
-    pylab.show()
+    if args.display:
+        import pylab
+        def PlotImage(image, title, npos):
+            pylab.subplot(npos)
+            pylab.imshow(image, cmap=pylab.cm.gray)
+            pylab.title(title)
+        PlotImage(original, "Original Image",               231)
+        PlotImage(enhanced, "Enhanced Image",               232)
+        PlotImage(edges,    "Edges (Gradient Image)",       233)
+        PlotImage(elimpa,   "Edges (Limpa, sem ruidos)",    234)
+        PlotImage(placa,    "Subimagem da Placa",           235)
+        
+        def onPress(event):
+            if event.key == 'q':
+                pylab.close()
+        pylab.connect('key_press_event', onPress)
+        pylab.show()
+        
+    
